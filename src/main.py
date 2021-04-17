@@ -78,8 +78,8 @@ def main():
         job.download_state = models.Data.DOWNLOAD_DOWNLOADING
         session.add(job)
         session.commit()
-        session.close()
         logging.info(f'A new job is claimed: {{id={job.id}, uri={job.uri}}}.')
+        session.close()
 
         url = f'{url_base}/{uri}'
         logging.info(f'Downloading from {url}')
