@@ -15,8 +15,9 @@ from sqlalchemy.engine import URL
 from sqlalchemy.exc import NoResultFound
 
 url_base = 'https://commoncrawl.s3.amazonaws.com'
-retry_interval = 1
-
+retry_interval = 5
+retries = 10
+socket_timeout = 10
 if os.name == 'nt':
     file_base = 'downloaded'
 else:
@@ -102,9 +103,9 @@ def main():
                     raise KeyboardInterrupt
                 except Exception as e:
                     print()
-                    if tries < 5:
+                    if tries < retries:
                         logging.error(f'An error occurred: {e}')
-                        logging.info(f'Retry after {retry_interval} seconds ({5 - tries}) left).')
+                        logging.info(f'Retry after {retry_interval} seconds ({retries - tries}) left).')
                         time.sleep(retry_interval)
                         tries += 1
                     else:
@@ -131,4 +132,5 @@ def main():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='[%(asctime)s [%(levelname)s]] %(message)s')
+    socket.setdefaulttimeout(socket_timeout)
     main()
