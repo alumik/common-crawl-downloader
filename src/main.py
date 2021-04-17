@@ -105,7 +105,7 @@ def main():
                 except Exception as e:
                     if tries < retries:
                         logging.error(f'An error occurred: {e}')
-                        logging.info(f'Retry after {retry_interval} seconds ({retries - tries}) left).')
+                        logging.info(f'Retry after {retry_interval} seconds ({retries - tries} left)).')
                         time.sleep(retry_interval)
                         tries += 1
                     else:
