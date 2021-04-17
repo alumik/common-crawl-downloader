@@ -118,10 +118,10 @@ def main():
                 job.server_obj = get_server(session, ip)
                 job.date = datetime.datetime.now()
                 job.size = int(urlopen(url).info().get('Content-Length', -1))
-                job.state = models.Data.DOWNLOAD_FINISHED
+                job.download_state = models.Data.DOWNLOAD_FINISHED
             else:
                 logging.error(f'Job failed: {{id={job.id}, uri={job.uri}}}.')
-                job.state = models.Data.DOWNLOAD_FAILED
+                job.download_state = models.Data.DOWNLOAD_FAILED
             session.add(job)
             session.commit()
             session.close()
@@ -134,7 +134,7 @@ def main():
                 .with_for_update() \
                 .one()
             logging.warning(f'Job cancelled: {{id={job.id}, uri={job.uri}}}.')
-            job.state = models.Data.DOWNLOAD_PENDING
+            job.download_state = models.Data.DOWNLOAD_PENDING
             session.add(job)
             session.commit()
             session.close()
