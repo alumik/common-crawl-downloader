@@ -73,7 +73,7 @@ def main():
                 .filter_by(download_state=models.Data.DOWNLOAD_PENDING) \
                 .with_for_update() \
                 .first()
-            logging.info(f'Database connected: {format_db_url(db_engine.url)}.')
+            logging.info(f'Database connected: {format_db_url(db_engine.url)}')
         except Exception as e:
             logging.critical(f'Failed to connect to the database: {e}')
             return
@@ -115,12 +115,13 @@ def main():
                 server = get_server(session, ip)
                 job.server_obj = server
                 job.date = datetime.datetime.now()
+                job.size = int(urlopen(url).info().get('Content-Length', -1))
                 update_job_state(session, job, models.Data.DOWNLOAD_FINISHED)
             else:
                 logging.error(f'Job {{id={job.id}, uri={job.uri}}} failed.')
                 update_job_state(session, job, models.Data.DOWNLOAD_FAILED)
             session.close()
-        except Exception:
+        except KeyboardInterrupt:
             print()
             logging.error(f'Job {{id={job.id}, uri={job.uri}}} cancelled.')
             update_job_state(session, job, models.Data.DOWNLOAD_PENDING)
