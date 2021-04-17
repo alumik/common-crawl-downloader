@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 from typing import Dict
 
 db = dict(
@@ -13,8 +14,8 @@ db = dict(
 
 
 def db_connect(_db: Dict) -> Engine:
-    engine = create_engine(f"{_db.get('sql_type', 'mysql')}://"
-                           f"{_db.get('user', 'root')}:{_db.get('password', '')}"
-                           f"@{_db.get('host', 'localhost')}:{_db.get('port', 3306)}"
-                           f"/{_db.get('database', '')}")
-    return engine
+    return create_engine(f"{_db.get('sql_type', 'mysql')}://"
+                         f"{_db.get('user', 'root')}:{_db.get('password', '')}"
+                         f"@{_db.get('host', 'localhost')}:{_db.get('port', 3306)}"
+                         f"/{_db.get('database', '')}",
+                         poolclass=NullPool)
