@@ -13,6 +13,7 @@ from urllib.request import urlopen
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
 
+connectivity_check_url = 'https://www.baidu.com'
 url_base = 'https://commoncrawl.s3.amazonaws.com'
 retry_interval = 5
 retries = 10
@@ -25,9 +26,9 @@ else:
 
 def check_connectivity():
     try:
-        urlopen("https://www.baidu.com", timeout=10)
+        urlopen(connectivity_check_url, timeout=10)
     except Exception as e:
-        logging.critical(f'Connectivity check failed: {e}')
+        logging.critical(f'Internet connectivity check failed: {e}')
         exit(-1)
 
 
@@ -57,7 +58,7 @@ def main():
     while True:
         check_connectivity()
 
-        logging.info('Fetching an unclaimed job...')
+        logging.info('Fetching a new job...')
         try:
             session = Session(bind=db_engine)
             job: models.Data = session \
@@ -70,7 +71,7 @@ def main():
             return
 
         if job is None:
-            logging.info('No unclaimed job found. The program is about to exit.')
+            logging.info('No unclaimed job found. This program is about to exit.')
             session.close()
             return
 
@@ -78,7 +79,7 @@ def main():
         job.download_state = models.Data.DOWNLOAD_DOWNLOADING
         session.add(job)
         session.commit()
-        logging.info(f'A new job is claimed: {{id={job.id}, uri={job.uri}}}.')
+        logging.info(f'A new job is fetched: {{id={job.id}, uri={job.uri}}}.')
         session.close()
 
         url = f'{url_base}/{uri}'
@@ -113,14 +114,13 @@ def main():
                 .with_for_update() \
                 .one()
             if finished:
-                logging.info(f'Job {{id={job.id}, uri={job.uri}}} succeeded.')
-                logging.info(f'The downloaded file is saved at {file}.')
+                logging.info(f'Job succeeded: {{id={job.id}, uri={job.uri}}}.')
                 job.server_obj = get_server(session, ip)
                 job.date = datetime.datetime.now()
                 job.size = int(urlopen(url).info().get('Content-Length', -1))
                 job.state = models.Data.DOWNLOAD_FINISHED
             else:
-                logging.error(f'Job {{id={job.id}, uri={job.uri}}} failed.')
+                logging.error(f'Job failed: {{id={job.id}, uri={job.uri}}}.')
                 job.state = models.Data.DOWNLOAD_FAILED
             session.add(job)
             session.commit()
@@ -133,7 +133,7 @@ def main():
                 .filter_by(uri=uri) \
                 .with_for_update() \
                 .one()
-            logging.warning(f'Job {{id={job.id}, uri={job.uri}}} cancelled.')
+            logging.warning(f'Job cancelled: {{id={job.id}, uri={job.uri}}}.')
             job.state = models.Data.DOWNLOAD_PENDING
             session.add(job)
             session.commit()
