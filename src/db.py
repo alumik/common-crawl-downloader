@@ -8,7 +8,7 @@ db = dict(
     password='Wangzhihao_2021',
     host='10.10.1.217',
     port=3306,
-    database='comcrawl_data_test',
+    database='comcrawl_data',
 )
 
 

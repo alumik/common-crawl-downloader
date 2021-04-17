@@ -1,5 +1,6 @@
 import os
 import db
+import sys
 import wget
 import time
 import models
@@ -17,7 +18,7 @@ from sqlalchemy.exc import NoResultFound
 url_base = 'https://commoncrawl.s3.amazonaws.com'
 retry_interval = 5
 retries = 10
-socket_timeout = 10
+socket_timeout = 30
 if os.name == 'nt':
     file_base = 'downloaded'
 else:
@@ -102,7 +103,6 @@ def main():
                 except KeyboardInterrupt:
                     raise KeyboardInterrupt
                 except Exception as e:
-                    print()
                     if tries < retries:
                         logging.error(f'An error occurred: {e}')
                         logging.info(f'Retry after {retry_interval} seconds ({retries - tries}) left).')
@@ -123,7 +123,6 @@ def main():
                 update_job_state(session, job, models.Data.DOWNLOAD_FAILED)
             session.close()
         except KeyboardInterrupt:
-            print()
             logging.error(f'Job {{id={job.id}, uri={job.uri}}} cancelled.')
             update_job_state(session, job, models.Data.DOWNLOAD_PENDING)
             session.close()
@@ -131,6 +130,8 @@ def main():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s [%(levelname)s]] %(message)s')
+    if len(sys.argv) == 2 or sys.argv[2] != 'console':
+        sys.stdout = open(f'log-{sys.argv[1]}.log', 'a')
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='[%(asctime)s [%(levelname)s]] %(message)s')
     socket.setdefaulttimeout(socket_timeout)
     main()
