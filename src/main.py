@@ -131,7 +131,8 @@ def main():
 
 if __name__ == '__main__':
     if len(sys.argv) == 2 or sys.argv[2] != 'console':
-        sys.stdout = open(f'log-{sys.argv[1]}.log', 'a')
+        pathlib.Path('log').mkdir(exist_ok=True)
+        sys.stdout = open(f'log/log-{sys.argv[1]}.log', 'a')
     logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='[%(asctime)s [%(levelname)s]] %(message)s')
     socket.setdefaulttimeout(socket_timeout)
     main()
