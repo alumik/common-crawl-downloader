@@ -1,3 +1,4 @@
 sqlalchemy
 wget
 numpy
+mysqlclient
