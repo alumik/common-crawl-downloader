@@ -26,7 +26,7 @@ else:
 
 def check_connectivity():
     try:
-        urlopen(connectivity_check_url, timeout=10)
+        urlopen(connectivity_check_url, timeout=30)
     except Exception as e:
         logging.critical(f'Internet connectivity check failed: {e}')
         exit(-1)
@@ -67,8 +67,11 @@ def main():
 
         logging.info('Fetching a new job...')
         session = Session(bind=db_engine)
-        while True:
+        tries = 0
+        uri = None
+        while tries < retries:
             try:
+                session.begin()
                 job: models.Data = session \
                     .query(models.Data) \
                     .with_for_update() \
@@ -85,13 +88,20 @@ def main():
                 logging.info(f'A new job is fetched: {{id={job.id}, uri={job.uri}}}.')
                 break
             except Exception as e:
-                logging.critical(f'Failed to fetch a new job: {e}')
+                logging.error(f'An error has occurred: {e}')
+                logging.info(f'Retrying ({retries - tries} left)).')
                 session.rollback()
+                tries += 1
         session.close()
+
+        if uri is None:
+            logging.critical(f'Failed to fetch a new job.')
+            return
 
         url = f'{url_base}/{uri}'
         logging.info(f'Downloading from {url}')
         tries = 0
+        session = Session(bind=db_engine)
         try:
             file = pathlib.Path(file_base).joinpath(uri)
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -100,7 +110,6 @@ def main():
                 try:
                     progbar = pb.DownloadProgBar()
                     wget.download(url, out=str(file), bar=progbar.update)
-                    session = Session(bind=db_engine)
                     job = find_job_by_uri(session=session, uri=uri)
                     job.server_obj = find_server_by_ip(session=session, ip=ip)
                     job.date = datetime.datetime.now()
@@ -120,13 +129,13 @@ def main():
                         job = find_job_by_uri(session=session, uri=uri)
                         job.download_state = models.Data.DOWNLOAD_FAILED
                         logging.error(f'Job failed: {{id={job.id}, uri={job.uri}}}.')
+                        break
 
             session.add(job)
             session.commit()
             session.close()
 
         except KeyboardInterrupt:
-            session = Session(bind=db_engine)
             job = find_job_by_uri(session=session, uri=uri)
             job.download_state = models.Data.DOWNLOAD_PENDING
             logging.warning(f'Job cancelled: {{id={job.id}, uri={job.uri}}}.')
