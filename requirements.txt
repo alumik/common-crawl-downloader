@@ -2,3 +2,4 @@ sqlalchemy
 wget
 numpy
 mysqlclient
+colorama

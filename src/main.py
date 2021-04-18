@@ -1,5 +1,6 @@
 import os
 import db
+import sys
 import wget
 import time
 import models
@@ -12,6 +13,7 @@ import progbar as pb
 from urllib.request import urlopen
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
+from colorama import Fore, Back
 
 connectivity_check_url = 'https://www.baidu.com'
 url_base = 'https://commoncrawl.s3.amazonaws.com'
@@ -24,12 +26,26 @@ else:
     file_base = '/home/common_crawl_data'
 
 
+def panic(message: str):
+    logging.critical(message)
+    sys.exit(-1)
+
+
 def check_connectivity():
-    try:
-        urlopen(connectivity_check_url, timeout=30)
-    except Exception as e:
-        logging.critical(f'Internet connectivity check failed: {e}')
-        exit(-1)
+    tries = 0
+    while True:
+        try:
+            urlopen(connectivity_check_url, timeout=30)
+        except Exception as e:
+            if tries < retries:
+                logging.error(f'{Fore.LIGHTRED_EX}Connectivity check failed: {e}{Fore.RESET}')
+                logging.info(f'Retry after {retry_interval} seconds ({retries - tries} left)).')
+                time.sleep(retry_interval)
+                tries += 1
+            else:
+                panic(f'{Fore.RED}Connectivity check failed after {retries} retries.{Fore.RESET}')
+            continue
+        break
 
 
 def get_ip() -> str:
@@ -67,9 +83,9 @@ def main():
 
         logging.info('Fetching a new job...')
         session = Session(bind=db_engine)
-        tries = 0
         uri = None
-        while tries < retries:
+        tries = 0
+        while True:
             try:
                 session.begin()
                 job: models.Data = session \
@@ -85,27 +101,29 @@ def main():
                 job.download_state = models.Data.DOWNLOAD_DOWNLOADING
                 session.add(job)
                 session.commit()
-                logging.info(f'A new job is fetched: {{id={job.id}, uri={job.uri}}}.')
-                break
+                logging.info(f'New job fetched: {Fore.CYAN}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
+                session.close()
             except Exception as e:
-                logging.error(f'An error has occurred: {e}')
-                logging.info(f'Retrying ({retries - tries} left)).')
-                session.rollback()
-                tries += 1
-        session.close()
-
-        if uri is None:
-            logging.critical(f'Failed to fetch a new job.')
-            return
+                if tries < retries:
+                    session.rollback()
+                    logging.error(f'{Fore.LIGHTRED_EX}An error has occurred: {e}{Fore.RESET}')
+                    logging.info(f'Retry after {retry_interval} seconds ({retries - tries} left)).')
+                    time.sleep(retry_interval)
+                    tries += 1
+                else:
+                    panic(f'{Fore.RED}Failed to fetch a new job after {retries} retries.{Fore.RESET}')
+                continue
+            break
 
         url = f'{url_base}/{uri}'
-        logging.info(f'Downloading from {url}')
-        tries = 0
+        logging.info(f'Downloading from {Fore.CYAN}{url}{Fore.RESET}')
         session = Session(bind=db_engine)
+
         try:
             file = pathlib.Path(file_base).joinpath(uri)
             file.parent.mkdir(parents=True, exist_ok=True)
 
+            tries = 0
             while True:
                 try:
                     progbar = pb.DownloadProgBar()
@@ -115,20 +133,22 @@ def main():
                     job.date = datetime.datetime.now()
                     job.size = int(urlopen(url).info().get('Content-Length', -1))
                     job.download_state = models.Data.DOWNLOAD_FINISHED
-                    logging.info(f'Job succeeded: {{id={job.id}, uri={job.uri}}}.')
+                    logging.info(f'Job {Back.GREEN}succeeded{Back.RESET}: '
+                                 f'{Fore.CYAN}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
                     break
                 except KeyboardInterrupt:
                     raise KeyboardInterrupt
                 except Exception as e:
                     if tries < retries:
-                        logging.error(f'An error has occurred: {e}')
+                        logging.error(f'{Fore.LIGHTRED_EX}An error has occurred: {e}{Fore.RESET}')
                         logging.info(f'Retry after {retry_interval} seconds ({retries - tries} left)).')
                         time.sleep(retry_interval)
                         tries += 1
                     else:
                         job = find_job_by_uri(session=session, uri=uri)
                         job.download_state = models.Data.DOWNLOAD_FAILED
-                        logging.error(f'Job failed: {{id={job.id}, uri={job.uri}}}.')
+                        logging.error(f'Job {Back.RED}failed{Back.RESET}: '
+                                      f'{Fore.CYAN}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
                         break
 
             session.add(job)
@@ -138,7 +158,8 @@ def main():
         except KeyboardInterrupt:
             job = find_job_by_uri(session=session, uri=uri)
             job.download_state = models.Data.DOWNLOAD_PENDING
-            logging.warning(f'Job cancelled: {{id={job.id}, uri={job.uri}}}.')
+            logging.warning(f'Job {Back.YELLOW}{Fore.BLACK}cancelled{Fore.RESET}{Back.RESET}: '
+                            f'{Fore.CYAN}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
             session.add(job)
             session.commit()
             session.close()
@@ -146,6 +167,6 @@ def main():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s [%(levelname)s]] %(message)s')
+    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)8s] %(message)s')
     socket.setdefaulttimeout(socket_timeout)
     main()
