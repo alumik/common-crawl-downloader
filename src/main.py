@@ -34,13 +34,13 @@ def check_connectivity():
 
 def get_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect((db.db.get('host'), db.db.get('port')))
+    s.connect((db.db_conf.get('host'), db.db_conf.get('port')))
     ip = s.getsockname()[0]
     s.close()
     return ip
 
 
-def get_server(session: Session, ip: str) -> models.Server:
+def find_server_by_ip(session: Session, ip: str) -> models.Server:
     try:
         server = session.query(models.Server).filter_by(ip=ip).one()
     except NoResultFound:
@@ -51,9 +51,16 @@ def get_server(session: Session, ip: str) -> models.Server:
     return server
 
 
+def find_job_by_uri(session: Session, uri: str) -> models.Data:
+    return session \
+        .query(models.Data) \
+        .filter_by(uri=uri) \
+        .one()
+
+
 def main():
     ip = get_ip()
-    db_engine = db.db_connect(db.db)
+    db_engine = db.db_connect(db.db_conf)
 
     while True:
         check_connectivity()
@@ -85,7 +92,6 @@ def main():
         url = f'{url_base}/{uri}'
         logging.info(f'Downloading from {url}')
         tries = 0
-        finished = False
         try:
             file = pathlib.Path(file_base).joinpath(uri)
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +100,13 @@ def main():
                 try:
                     progbar = pb.DownloadProgBar()
                     wget.download(url, out=str(file), bar=progbar.update)
-                    finished = True
+                    session = Session(bind=db_engine)
+                    job = find_job_by_uri(session=session, uri=uri)
+                    job.server_obj = find_server_by_ip(session=session, ip=ip)
+                    job.date = datetime.datetime.now()
+                    job.size = int(urlopen(url).info().get('Content-Length', -1))
+                    job.download_state = models.Data.DOWNLOAD_FINISHED
+                    logging.info(f'Job succeeded: {{id={job.id}, uri={job.uri}}}.')
                     break
                 except KeyboardInterrupt:
                     raise KeyboardInterrupt
@@ -105,36 +117,19 @@ def main():
                         time.sleep(retry_interval)
                         tries += 1
                     else:
-                        break
+                        job = find_job_by_uri(session=session, uri=uri)
+                        job.download_state = models.Data.DOWNLOAD_FAILED
+                        logging.error(f'Job failed: {{id={job.id}, uri={job.uri}}}.')
 
-            session = Session(bind=db_engine)
-            job: models.Data = session \
-                .query(models.Data) \
-                .filter_by(uri=uri) \
-                .with_for_update() \
-                .one()
-            if finished:
-                logging.info(f'Job succeeded: {{id={job.id}, uri={job.uri}}}.')
-                job.server_obj = get_server(session, ip)
-                job.date = datetime.datetime.now()
-                job.size = int(urlopen(url).info().get('Content-Length', -1))
-                job.download_state = models.Data.DOWNLOAD_FINISHED
-            else:
-                logging.error(f'Job failed: {{id={job.id}, uri={job.uri}}}.')
-                job.download_state = models.Data.DOWNLOAD_FAILED
             session.add(job)
             session.commit()
             session.close()
 
         except KeyboardInterrupt:
             session = Session(bind=db_engine)
-            job: models.Data = session \
-                .query(models.Data) \
-                .filter_by(uri=uri) \
-                .with_for_update() \
-                .one()
-            logging.warning(f'Job cancelled: {{id={job.id}, uri={job.uri}}}.')
+            job = find_job_by_uri(session=session, uri=uri)
             job.download_state = models.Data.DOWNLOAD_PENDING
+            logging.warning(f'Job cancelled: {{id={job.id}, uri={job.uri}}}.')
             session.add(job)
             session.commit()
             session.close()

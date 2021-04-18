@@ -3,7 +3,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 from typing import Dict
 
-db = dict(
+db_conf = dict(
     sql_type='mysql',
     user='wangzhihao',
     password='Wangzhihao_2021',
