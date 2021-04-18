@@ -3,6 +3,7 @@ import db
 import sys
 import wget
 import time
+import pytz
 import models
 import socket
 import logging
@@ -20,6 +21,7 @@ url_base = 'https://commoncrawl.s3.amazonaws.com'
 retry_interval = 5
 retries = 10
 socket_timeout = 30
+timezone = 'Asia/Shanghai'
 if os.name == 'nt':
     file_base = 'downloaded'
 else:
@@ -130,7 +132,7 @@ def main():
                     wget.download(url, out=str(file), bar=progbar.update)
                     job = find_job_by_uri(session=session, uri=uri)
                     job.server_obj = find_server_by_ip(session=session, ip=ip)
-                    job.date = datetime.datetime.now()
+                    job.date = datetime.datetime.now(tz=pytz.timezone(timezone))
                     job.size = int(urlopen(url).info().get('Content-Length', -1))
                     job.download_state = models.Data.DOWNLOAD_FINISHED
                     logging.info(f'Job {Back.GREEN}succeeded{Back.RESET}: '

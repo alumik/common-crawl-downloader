@@ -3,3 +3,4 @@ wget
 numpy
 mysqlclient
 colorama
+pytz
