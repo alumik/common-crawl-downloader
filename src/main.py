@@ -66,27 +66,27 @@ def main():
         check_connectivity()
 
         logging.info('Fetching a new job...')
-        try:
-            session = Session(bind=db_engine)
-            job: models.Data = session \
-                .query(models.Data) \
-                .filter_by(download_state=models.Data.DOWNLOAD_PENDING) \
-                .with_for_update() \
-                .first()
-        except Exception as e:
-            logging.critical(f'Failed to connect to the database: {e}')
-            return
-
-        if job is None:
-            logging.info('No unclaimed job found. This program is about to exit.')
-            session.close()
-            return
-
-        uri = job.uri
-        job.download_state = models.Data.DOWNLOAD_DOWNLOADING
-        session.add(job)
-        session.commit()
-        logging.info(f'A new job is fetched: {{id={job.id}, uri={job.uri}}}.')
+        session = Session(bind=db_engine)
+        while True:
+            try:
+                job: models.Data = session \
+                    .query(models.Data) \
+                    .with_for_update() \
+                    .filter_by(download_state=models.Data.DOWNLOAD_PENDING) \
+                    .first()
+                if job is None:
+                    logging.info('No unclaimed job found. This program is about to exit.')
+                    session.close()
+                    return
+                uri = job.uri
+                job.download_state = models.Data.DOWNLOAD_DOWNLOADING
+                session.add(job)
+                session.commit()
+                logging.info(f'A new job is fetched: {{id={job.id}, uri={job.uri}}}.')
+                break
+            except Exception as e:
+                logging.critical(f'Failed to fetch a new job: {e}')
+                session.rollback()
         session.close()
 
         url = f'{url_base}/{uri}'
