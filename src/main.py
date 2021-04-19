@@ -14,7 +14,7 @@ import progbar as pb
 from urllib.request import urlopen
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound
-from colorama import Fore, Back
+from colorama import Fore, Back, Style
 
 connectivity_check_url = 'https://www.baidu.com'
 url_base = 'https://commoncrawl.s3.amazonaws.com'
@@ -45,7 +45,7 @@ def check_connectivity():
                 time.sleep(retry_interval)
                 tries += 1
             else:
-                panic(f'{Fore.RED}Connectivity check failed after {retries} retries.{Fore.RESET}')
+                panic(f'{Fore.LIGHTRED_EX}Connectivity check failed after {retries} retries.{Fore.RESET}')
             continue
         break
 
@@ -103,7 +103,7 @@ def main():
                 job.download_state = models.Data.DOWNLOAD_DOWNLOADING
                 session.add(job)
                 session.commit()
-                logging.info(f'New job fetched: {Fore.CYAN}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
+                logging.info(f'New job fetched: {Fore.LIGHTCYAN_EX}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
                 session.close()
             except Exception as e:
                 if tries < retries:
@@ -113,12 +113,12 @@ def main():
                     time.sleep(retry_interval)
                     tries += 1
                 else:
-                    panic(f'{Fore.RED}Failed to fetch a new job after {retries} retries.{Fore.RESET}')
+                    panic(f'{Fore.LIGHTRED_EX}Failed to fetch a new job after {retries} retries.{Fore.RESET}')
                 continue
             break
 
         url = f'{url_base}/{uri}'
-        logging.info(f'Downloading from {Fore.CYAN}{url}{Fore.RESET}')
+        logging.info(f'Download from {Fore.LIGHTCYAN_EX}{url}{Fore.RESET}')
         session = Session(bind=db_engine)
 
         try:
@@ -135,8 +135,7 @@ def main():
                     job.date = datetime.datetime.now(tz=pytz.timezone(timezone))
                     job.size = int(urlopen(url).info().get('Content-Length', -1))
                     job.download_state = models.Data.DOWNLOAD_FINISHED
-                    logging.info(f'Job {Back.GREEN}succeeded{Back.RESET}: '
-                                 f'{Fore.CYAN}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
+                    logging.info(f'Job {Back.GREEN}{Fore.BLACK}succeeded{Fore.RESET}{Back.RESET}.')
                     break
                 except KeyboardInterrupt:
                     raise KeyboardInterrupt
@@ -149,8 +148,7 @@ def main():
                     else:
                         job = find_job_by_uri(session=session, uri=uri)
                         job.download_state = models.Data.DOWNLOAD_FAILED
-                        logging.error(f'Job {Back.RED}failed{Back.RESET}: '
-                                      f'{Fore.CYAN}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
+                        logging.error(f'Job {Back.RED}failed{Back.RESET}.')
                         break
 
             session.add(job)
@@ -160,8 +158,7 @@ def main():
         except KeyboardInterrupt:
             job = find_job_by_uri(session=session, uri=uri)
             job.download_state = models.Data.DOWNLOAD_PENDING
-            logging.warning(f'Job {Back.YELLOW}{Fore.BLACK}cancelled{Fore.RESET}{Back.RESET}: '
-                            f'{Fore.CYAN}{{id={job.id}, uri={job.uri}}}{Fore.RESET}.')
+            logging.warning(f'Job {Back.YELLOW}{Fore.BLACK}cancelled{Fore.RESET}{Back.RESET}.')
             session.add(job)
             session.commit()
             session.close()
@@ -169,6 +166,7 @@ def main():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)8s] %(message)s')
+    logging.basicConfig(level=logging.INFO,
+                        format=f'{Style.BRIGHT}[%(asctime)s] [%(levelname)8s]{Style.RESET_ALL} %(message)s')
     socket.setdefaulttimeout(socket_timeout)
     main()
