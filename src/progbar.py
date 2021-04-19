@@ -3,6 +3,8 @@ import sys
 import time
 import numpy as np
 
+from typing import Iterable, List, Optional
+
 
 class ProgBar:
     """Displays a progress bar.
@@ -10,30 +12,24 @@ class ProgBar:
       Arguments:
           target: Total number of steps expected, None if unknown.
           width: Progress bar width on screen.
-          verbose: Verbosity mode, 0 (silent), 1 (verbose), 2 (semi-verbose)
           stateful_metrics: Iterable of string names of metrics that should *not* be
             averaged over time. Metrics in this list will be displayed as-is. All
             others will be averaged by the progbar before display.
           interval: Minimum visual progress update interval (in seconds).
-          unit_name: Display name for step counts (usually "step" or "sample").
     """
 
     def __init__(self,
-                 target,
-                 width=30,
-                 verbose=1,
-                 interval=0.05,
-                 stateful_metrics=None,
-                 unit_name='step'):
-        self.target = target
-        self.width = width
-        self.verbose = verbose
-        self.interval = interval
-        self.unit_name = unit_name
+                 target: int,
+                 width: int = 30,
+                 interval: float = 0.05,
+                 stateful_metrics: Optional[Iterable] = None):
+        self._target = target
+        self._width = width
+        self._interval = interval
         if stateful_metrics:
-            self.stateful_metrics = set(stateful_metrics)
+            self._stateful_metrics = set(stateful_metrics)
         else:
-            self.stateful_metrics = set()
+            self._stateful_metrics = set()
 
         self._dynamic_display = ((hasattr(sys.stdout, 'isatty') and
                                   sys.stdout.isatty()) or
@@ -42,14 +38,16 @@ class ProgBar:
                                  'PYCHARM_HOSTED' in os.environ)
         self._total_width = 0
         self._seen_so_far = 0
-        # We use a dict + list to avoid garbage collection
-        # issues found in OrderedDict
+        # We use a dict + list to avoid garbage collection issues found in OrderedDict
         self._values = {}
         self._values_order = []
         self._start = time.time()
         self._last_update = 0
 
-    def update(self, current, values=None, finalize=None):
+    def update(self,
+               current: int,
+               values: Optional[List] = None,
+               finalize: Optional[bool] = None):
         """Updates the progress bar.
 
         Arguments:
@@ -58,19 +56,19 @@ class ProgBar:
               `stateful_metrics`, `value_for_last_step` will be displayed as-is.
               Else, an average of the metric over time will be displayed.
             finalize: Whether this is the last update for the progress bar. If
-              `None`, defaults to `current >= self.target`.
+              `None`, defaults to `current >= self._target`.
         """
         if finalize is None:
-            if self.target is None:
+            if self._target is None:
                 finalize = False
             else:
-                finalize = current >= self.target
+                finalize = current >= self._target
 
         values = values or []
         for k, v in values:
             if k not in self._values_order:
                 self._values_order.append(k)
-            if k not in self.stateful_metrics:
+            if k not in self._stateful_metrics:
                 # In the case that progress bar doesn't have a target value in the first
                 # epoch, both on_batch_end and on_epoch_end will be called, which will
                 # cause 'current' and 'self._seen_so_far' to have the same value. Force
@@ -89,98 +87,71 @@ class ProgBar:
         self._seen_so_far = current
 
         now = time.time()
-        info = ' - %.0fs' % (now - self._start)
-        if self.verbose == 1:
-            if now - self._last_update < self.interval and not finalize:
-                return
+        info = f' - {now - self._start:.0f}s'
+        if now - self._last_update < self._interval and not finalize:
+            return
 
-            prev_total_width = self._total_width
-            if self._dynamic_display:
-                sys.stdout.write('\b' * prev_total_width)
-                sys.stdout.write('\r')
-            else:
-                sys.stdout.write('\n')
+        prev_total_width = self._total_width
+        if self._dynamic_display:
+            sys.stdout.write('\b' * prev_total_width)
+            sys.stdout.write('\r')
+        else:
+            sys.stdout.write('\n')
 
-            if self.target is not None:
-                numdigits = int(np.log10(self.target)) + 1
-                bar = ('%' + str(numdigits) + 'd/%d [') % (current, self.target)
-                prog = float(current) / self.target
-                prog_width = int(self.width * prog)
-                if prog_width > 0:
-                    bar += ('=' * (prog_width - 1))
-                    if current < self.target:
-                        bar += '>'
-                    else:
-                        bar += '='
-                bar += ('.' * (self.width - prog_width))
-                bar += ']'
-            else:
-                bar = '%7d/Unknown' % current
-
-            self._total_width = len(bar)
-            sys.stdout.write(bar)
-
-            if current:
-                time_per_unit = (now - self._start) / current
-            else:
-                time_per_unit = 0
-
-            if self.target is None or finalize:
-                if time_per_unit >= 1 or time_per_unit == 0:
-                    info += ' %.0fs/%s' % (time_per_unit, self.unit_name)
-                elif time_per_unit >= 1e-3:
-                    info += ' %.0fms/%s' % (time_per_unit * 1e3, self.unit_name)
+        if self._target is not None:
+            num_digits = int(np.log10(self._target)) + 1
+            bar = f'{current:{num_digits}d}/{self._target} ['
+            progress = float(current) / self._target
+            progress_width = int(self._width * progress)
+            if progress_width > 0:
+                bar += ('=' * (progress_width - 1))
+                if current < self._target:
+                    bar += '>'
                 else:
-                    info += ' %.0fus/%s' % (time_per_unit * 1e6, self.unit_name)
+                    bar += '='
+            bar += ('.' * (self._width - progress_width))
+            bar += ']'
+        else:
+            bar = f'{current:7d}/Unknown'
+
+        self._total_width = len(bar)
+        sys.stdout.write(bar)
+
+        if current:
+            time_per_unit = (now - self._start) / current
+        else:
+            time_per_unit = 0
+
+        if self._target is not None and not finalize:
+            eta = time_per_unit * (self._target - current)
+            if eta > 3600:
+                eta_format = f'{eta // 3600:.0f}:{(eta % 3600) // 60:02.0f}:{eta % 60:02.0f}'
+            elif eta > 60:
+                eta_format = f'{eta // 60:.0f}:{eta % 60:02.0f}'
             else:
-                eta = time_per_unit * (self.target - current)
-                if eta > 3600:
-                    eta_format = '%d:%02d:%02d' % (eta // 3600,
-                                                   (eta % 3600) // 60, eta % 60)
-                elif eta > 60:
-                    eta_format = '%d:%02d' % (eta // 60, eta % 60)
+                eta_format = f'{eta:.0f}s'
+            info = f' - ETA: {eta_format}'
+
+        for k in self._values_order:
+            info += f' - {k}:'
+            if isinstance(self._values[k], list):
+                avg = np.mean(self._values[k][0] / max(1, self._values[k][1]))
+                if abs(avg) > 1e-3:
+                    info += f' {avg:.4f}'
                 else:
-                    eta_format = '%ds' % eta
+                    info += f' {avg:.4e}'
+            else:
+                info += f' {self._values[k]}'
 
-                info = ' - ETA: %s' % eta_format
+        self._total_width += len(info)
+        if prev_total_width > self._total_width:
+            info += (' ' * (prev_total_width - self._total_width))
 
-            for k in self._values_order:
-                info += ' - %s:' % k
-                if isinstance(self._values[k], list):
-                    avg = np.mean(self._values[k][0] / max(1, self._values[k][1]))
-                    if abs(avg) > 1e-3:
-                        info += ' %.4f' % avg
-                    else:
-                        info += ' %.4e' % avg
-                else:
-                    info += ' %s' % self._values[k]
+        if finalize:
+            info += '\n'
 
-            self._total_width += len(info)
-            if prev_total_width > self._total_width:
-                info += (' ' * (prev_total_width - self._total_width))
-
-            if finalize:
-                info += '\n'
-
-            sys.stdout.write(info)
-            sys.stdout.flush()
-
-        elif self.verbose == 2:
-            if finalize:
-                numdigits = int(np.log10(self.target)) + 1
-                count = ('%' + str(numdigits) + 'd/%d') % (current, self.target)
-                info = count + info
-                for k in self._values_order:
-                    info += ' - %s:' % k
-                    avg = np.mean(self._values[k][0] / max(1, self._values[k][1]))
-                    if avg > 1e-3:
-                        info += ' %.4f' % avg
-                    else:
-                        info += ' %.4e' % avg
-                info += '\n'
-
-                sys.stdout.write(info)
-                sys.stdout.flush()
+        sys.stdout.write(info)
+        sys.stdout.flush()
 
         self._last_update = now
 
