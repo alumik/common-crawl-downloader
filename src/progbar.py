@@ -69,10 +69,7 @@ class ProgBar:
             if k not in self._values_order:
                 self._values_order.append(k)
             if k not in self._stateful_metrics:
-                # In the case that progress bar doesn't have a target value in the first
-                # epoch, both on_batch_end and on_epoch_end will be called, which will
-                # cause 'current' and 'self._seen_so_far' to have the same value. Force
-                # the minimal value to 1 here, otherwise stateful_metric will be 0s.
+                # Force the minimal value to 1 here, otherwise stateful_metric will be 0s.
                 value_base = max(current - self._seen_so_far, 1)
                 if k not in self._values:
                     self._values[k] = [v * value_base, value_base]
