@@ -44,6 +44,24 @@ def check_connectivity():
         break
 
 
+def check_schedule(start_time: str, end_time: str, enabled: bool = True):
+    if enabled:
+        logging.info(f'Download schedule:'
+                     f' {Fore.LIGHTMAGENTA_EX}{{start_time={start_time}, end_time={end_time}}}{Fore.RESET}.')
+        while True:
+            now = datetime.datetime.now(tz=pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
+            if start_time <= end_time:
+                if now < start_time or now > end_time:
+                    time.sleep(SCHEDULE_RETRY_INTERVAL)
+                else:
+                    break
+            else:
+                if end_time < now < start_time:
+                    time.sleep(SCHEDULE_RETRY_INTERVAL)
+                else:
+                    break
+
+
 def find_worker_by_name(session: Session, name: str) -> models.Worker:
     try:
         worker = session.query(models.Worker).filter_by(name=name).one()
@@ -66,7 +84,12 @@ def main():
     db_engine = db.db_connect(DB_CONF)
 
     while True:
-        check_connectivity()
+        try:
+            check_connectivity()
+            check_schedule(start_time=START_TIME, end_time=END_TIME, enabled=SCHEDULE_ENABLED)
+        except KeyboardInterrupt:
+            logging.info(f'Bye.')
+            return
 
         logging.info('Fetching a new job...')
         session = Session(bind=db_engine)
@@ -160,6 +183,10 @@ if __name__ == '__main__':
     RETRIES = config.getint('worker', 'retries')
     SOCKET_TIMEOUT = config.getint('worker', 'socket_timeout')
     DOWNLOAD_PATH = config.get('worker', 'download_path')
+    SCHEDULE_ENABLED = config.getboolean('schedule', 'enabled')
+    START_TIME = config.get('schedule', 'start_time')
+    END_TIME = config.get('schedule', 'end_time')
+    SCHEDULE_RETRY_INTERVAL = config.getint('schedule', 'retry_interval')
 
     logging.basicConfig(level=logging.INFO,
                         format=f'{Style.BRIGHT}[%(asctime)s] [%(levelname)8s]{Style.RESET_ALL} %(message)s')
