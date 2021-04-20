@@ -58,12 +58,12 @@ def get_ip() -> str:
     return ip
 
 
-def find_server_by_ip(session: Session, ip: str) -> models.Server:
+def find_server_by_ip(session: Session, ip: str) -> models.Worker:
     try:
-        server = session.query(models.Server).filter_by(ip=ip).one()
+        server = session.query(models.Worker).filter_by(ip=ip).one()
     except NoResultFound:
-        server = models.Server()
-        server.ip = ip
+        server = models.Worker()
+        server.name = ip
         session.add(server)
         session.commit()
     return server
@@ -131,8 +131,8 @@ def main():
                     progbar = pb.DownloadProgBar()
                     wget.download(url, out=str(file), bar=progbar.update)
                     job = find_job_by_uri(session=session, uri=uri)
-                    job.server_obj = find_server_by_ip(session=session, ip=ip)
-                    job.date = datetime.datetime.now(tz=pytz.timezone(timezone))
+                    job.worker = find_server_by_ip(session=session, ip=ip)
+                    job.finished_at = datetime.datetime.now(tz=pytz.timezone(timezone))
                     job.size = int(urlopen(url).info().get('Content-Length', -1))
                     job.download_state = models.Data.DOWNLOAD_FINISHED
                     logging.info(f'Job {Back.GREEN}{Fore.BLACK}succeeded{Fore.RESET}{Back.RESET}.')
