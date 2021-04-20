@@ -1,6 +1,6 @@
-sqlalchemy
 wget
-numpy
-mysqlclient
-colorama
 pytz
+numpy
+colorama
+sqlalchemy
+mysqlclient

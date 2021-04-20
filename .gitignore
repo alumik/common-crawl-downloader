@@ -2,3 +2,6 @@
 __pycache__/
 downloaded/
 log/
+configs/*
+
+!configs/default.conf

@@ -1,21 +1,32 @@
+import dataclasses
+import configparser
+
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
-from typing import Dict
-
-db_conf = dict(
-    sql_type='mysql',
-    user='wangzhihao',
-    password='Wangzhihao_2021',
-    host='10.10.1.217',
-    port=3306,
-    database='comcrawl_data',
-)
 
 
-def db_connect(_db: Dict) -> Engine:
-    return create_engine(f"{_db.get('sql_type', 'mysql')}://"
-                         f"{_db.get('user', 'root')}:{_db.get('password', '')}"
-                         f"@{_db.get('host', 'localhost')}:{_db.get('port', 3306)}"
-                         f"/{_db.get('database', '')}",
+@dataclasses.dataclass
+class DatabaseConfig:
+    drivername: str = 'mysql'
+    username: str = 'root'
+    password: str = ''
+    host: str = 'localhost'
+    port: int = 3306
+    database: str = ''
+
+
+def get_database_config(config: configparser.ConfigParser) -> DatabaseConfig:
+    return DatabaseConfig(
+        drivername=config.get('database', 'drivername'),
+        username=config.get('database', 'username'),
+        password=config.get('database', 'password'),
+        host=config.get('database', 'host'),
+        port=config.getint('database', 'port'),
+        database=config.get('database', 'database'),
+    )
+
+
+def db_connect(conf: DatabaseConfig) -> Engine:
+    return create_engine(f"{conf.drivername}://{conf.username}:{conf.password}@{conf.host}:{conf.port}/{conf.database}",
                          poolclass=NullPool)
