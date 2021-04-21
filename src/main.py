@@ -85,8 +85,8 @@ def main():
 
     while True:
         try:
-            check_connectivity()
             check_schedule(start_time=START_TIME, end_time=END_TIME, enabled=SCHEDULE_ENABLED)
+            check_connectivity()
         except KeyboardInterrupt:
             logging.info(f'Bye.')
             return
