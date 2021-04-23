@@ -1,9 +1,9 @@
 # Common Crawl 数据下载器
 
-语言: [English](https://github.com/AlumiK/comcrawl-downloader/blob/main/README.md) | [中文](https://github.com/AlumiK/comcrawl-downloader/blob/main/README_CN.md)
+语言: [English](https://github.com/AlumiK/common-crawl-downloader/blob/main/README.md) | [中文](https://github.com/AlumiK/common-crawl-downloader/blob/main/README_CN.md)
 
 ![python-3.7-3.8-3.9](https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue)
-[![license-MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/AlumiK/comcrawl-downloader/blob/main/LICENSE)
+[![license-MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/AlumiK/common-crawl-downloader/blob/main/LICENSE)
 
 Common Crawl 数据分布式下载脚本。
 
@@ -45,7 +45,7 @@ host = localhost
 ; 数据库端口
 port = 3306
 ; 数据库名称
-database = comcrawl_data
+database = common_crawl
 
 ; 下载器相关配置
 [worker]
@@ -78,7 +78,7 @@ retry_interval = 300
 
 ```ini
 [database]
-username = comcrawl
+username = common_crawl
 password = &WcKLEsX!
 host = 10.10.1.217
 

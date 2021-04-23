@@ -1,0 +1,11 @@
+name: common-crawl
+dependencies:
+  - python=3.9
+  - pytz
+  - numpy
+  - colorama
+  - sqlalchemy
+  - pip
+  - pip:
+      - mysqlclient
+      - wget

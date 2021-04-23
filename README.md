@@ -1,9 +1,9 @@
 # Common Crawl Downloader
 
-Languages: [English](https://github.com/AlumiK/comcrawl-downloader/blob/main/README.md) | [中文](https://github.com/AlumiK/comcrawl-downloader/blob/main/README_CN.md)
+Languages: [English](https://github.com/AlumiK/common-crawl-downloader/blob/main/README.md) | [中文](https://github.com/AlumiK/common-crawl-downloader/blob/main/README_CN.md)
 
 ![python-3.7-3.8-3.9](https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue)
-[![license-MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/AlumiK/comcrawl-downloader/blob/main/LICENSE)
+[![license-MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/AlumiK/common-crawl-downloader/blob/main/LICENSE)
 
 Distributed download scripts for Common Crawl data.
 
@@ -36,7 +36,7 @@ username = user
 password = password
 host = localhost
 port = 3306
-database = comcrawl_data
+database = common_crawl
 
 [worker]
 ; The name of this worker
@@ -67,7 +67,7 @@ An example of a valid local config file:
 
 ```ini
 [database]
-username = comcrawl
+username = common_crawl
 password = &WcKLEsX!
 host = 10.10.1.217
 
