@@ -17,7 +17,7 @@ Install dependencies by:
 pip install -r requirements.txt
 ```
 
-Please note that `libmysqlclient-dev` or an equivalent one is required on Linux distros：
+`libmysqlclient-dev` or an equivalent one is also required on Linux distros：
 
 ```
 sudo apt install libmysqlclient-dev
@@ -61,7 +61,7 @@ end_time = 07:59:59
 retry_interval = 300
 ```
 
-Please **do not** modify the default config file directly. You can create your `local.conf` under the `configs` folder and add the entries you want to modify in it.
+**Do not** modify the default config file directly. You can create your own `local.conf` under the `configs` folder and add modified entries in it.
 
 An example of a valid local config file:
 
@@ -85,7 +85,7 @@ Run the following command at the root path of the project:
 python src/main.py
 ```
 
-Please press `CTRL-C` to exit the download process instead of kill it directly, which will cause data loss and inconsistency.
+**Always** press `CTRL-C` to exit the download process. Killing it directly will cause data loss and inconsistency in database.
 
 ## Database Structure
 
