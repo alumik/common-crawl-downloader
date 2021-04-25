@@ -20,6 +20,7 @@ from colorama import Fore, Back, Style
 CONNECTIVITY_CHECK_URL = 'https://www.baidu.com'
 URL_BASE = 'https://commoncrawl.s3.amazonaws.com'
 TIMEZONE = 'Asia/Shanghai'
+CONFIG_PATH = 'configs'
 
 
 def panic(message: str):
@@ -176,7 +177,7 @@ def main():
 
 
 if __name__ == '__main__':
-    config = configs.config()
+    config = configs.config(CONFIG_PATH)
     DB_CONF = db.get_database_config(config)
     WORKER_NAME = config.get('worker', 'name')
     RETRY_INTERVAL = config.getint('worker', 'retry_interval')
