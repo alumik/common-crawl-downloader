@@ -85,6 +85,8 @@ Run the following command at the root path of the project:
 python src/main.py
 ```
 
+Please press `CTRL-C` to exit the download process instead of kill it directly, which will cause data loss and inconsistency.
+
 ## Database Structure
 
 ### data
