@@ -108,7 +108,7 @@ def main():
                 session.begin()
                 job: models.Data = session \
                     .query(models.Data) \
-                    .with_for_update(skip_locked=True) \
+                    .with_for_update(of=models.Data, skip_locked=True) \
                     .filter_by(download_state=models.Data.DOWNLOAD_PENDING) \
                     .first()
                 if job is None:
