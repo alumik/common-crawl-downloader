@@ -3,4 +3,9 @@ pytz
 numpy
 colorama
 sqlalchemy
-mysqlclient
+pymysql
+pyyaml
+deepmerge
+dacite
+requests
+sqlalchemy-stubs

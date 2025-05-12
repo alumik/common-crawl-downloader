@@ -1,0 +1,28 @@
+database:
+  drivername: mysql+pymysql
+  username: user
+  password: password
+  host: localhost
+  port: 3306
+  database: common_crawl
+
+worker:
+  name: unknown
+  download_path: downloaded
+  max_retries: 10
+  retry_interval: 5
+
+scheduler:
+  enabled: false
+  start_time: '20:00:00'
+  end_time: '07:59:59'
+  retry_interval: 300
+
+network:
+  connectivity_check_url: http://www.baidu.com/
+  timeout: 30
+  max_retries: 10
+  retry_interval: 5
+
+timezone: Asia/Shanghai
+base_url: https://commoncrawl.s3.amazonaws.com/

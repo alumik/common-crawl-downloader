@@ -7,20 +7,19 @@ import logging
 import pathlib
 import colorama
 import datetime
+import requests
+import argparse
+
+from urllib.request import urlopen
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import NoResultFound
 
 import db
 import utils
 import models
 import configs
 
-from urllib.request import urlopen
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import NoResultFound
-
-CONNECTIVITY_CHECK_URL = 'https://www.baidu.com'
-URL_BASE = 'https://commoncrawl.s3.amazonaws.com'
-TIMEZONE = 'Asia/Shanghai'
-CONFIG_PATH = 'configs'
+from src.models import Data
 
 
 def panic(message: str):
@@ -28,49 +27,59 @@ def panic(message: str):
     sys.exit(-1)
 
 
-def check_connectivity():
-    tries = 0
+def check_connectivity(config: configs.Config):
+    retries = 0
+    connectivity_check_url = config.network.connectivity_check_url
+    timeout = config.network.timeout
+    max_retries = config.network.max_retries
+    retry_interval = config.network.retry_interval
     while True:
         try:
-            urlopen(CONNECTIVITY_CHECK_URL, timeout=30)
-        except Exception as e:
-            if tries < RETRIES:
-                logging.error(f'{colorama.Fore.LIGHTRED_EX}'
-                              f'Connectivity check failed: {e}'
-                              f'{colorama.Fore.RESET}')
-                logging.info(f'Retry after {RETRY_INTERVAL} seconds ({RETRIES - tries} left)).')
-                time.sleep(RETRY_INTERVAL)
-                tries += 1
+            requests.head(connectivity_check_url, timeout=timeout)
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
+            if retries < max_retries:
+                logging.error(
+                    f'{colorama.Fore.LIGHTRED_EX}'
+                    f'Connectivity check failed: {e}'
+                    f'{colorama.Fore.RESET}'
+                )
+                logging.info(f'Retry after {retry_interval} seconds ({max_retries - retries} left).')
+                time.sleep(retry_interval)
+                retries += 1
             else:
-                panic(f'{colorama.Fore.LIGHTRED_EX}'
-                      f'Connectivity check failed after {RETRIES} retries.'
-                      f'{colorama.Fore.RESET}')
+                panic(
+                    f'{colorama.Fore.LIGHTRED_EX}'
+                    f'Connectivity check failed after {max_retries} retries.'
+                    f'{colorama.Fore.RESET}'
+                )
             continue
         break
 
 
-def check_schedule(start_time: str, end_time: str, enabled: bool = True):
-    if enabled:
-        logging.info(f'Download schedule: '
-                     f'{colorama.Fore.LIGHTMAGENTA_EX}'
-                     f'{{start_time={start_time}, end_time={end_time}}}'
-                     f'{colorama.Fore.RESET}'
-                     f'.')
-        while True:
-            now = datetime.datetime.now(tz=pytz.timezone(TIMEZONE)).strftime('%H:%M:%S')
-            if start_time <= end_time:
-                if now < start_time or now > end_time:
-                    time.sleep(SCHEDULE_RETRY_INTERVAL)
-                else:
-                    break
-            else:
-                if end_time < now < start_time:
-                    time.sleep(SCHEDULE_RETRY_INTERVAL)
-                else:
-                    break
+def check_schedule(config: configs.Config):
+    enabled = config.scheduler.enabled
+    start_time = config.scheduler.start_time
+    end_time = config.scheduler.end_time
+    retry_interval = config.scheduler.retry_interval
+    if not enabled:
+        return
+    logging.info(
+        f'Download schedule: '
+        f'{colorama.Fore.LIGHTMAGENTA_EX}'
+        f'{{start_time={start_time}, end_time={end_time}}}'
+        f'{colorama.Fore.RESET}'
+        f'.'
+    )
+    while True:
+        now = datetime.datetime.now(tz=pytz.timezone(config.timezone)).strftime('%H:%M:%S')
+        if (start_time <= end_time and (now < start_time or now > end_time)) or \
+                (start_time > end_time and (end_time < now < start_time)):
+            time.sleep(retry_interval)
+        else:
+            break
 
 
-def find_worker_by_name(session: Session, name: str) -> models.Worker:
+def find_or_create_worker_by_name(session: Session, name: str) -> models.Worker:
     try:
         worker = session.query(models.Worker).filter_by(name=name).one()
     except NoResultFound:
@@ -81,20 +90,30 @@ def find_worker_by_name(session: Session, name: str) -> models.Worker:
     return worker
 
 
-def find_job_by_uri(session: Session, uri: str) -> models.Data:
+def find_job_by_uri(session: Session, uri: str) -> Data:
     return session \
         .query(models.Data) \
         .filter_by(uri=uri) \
         .one()
 
 
+def get_args():
+    parser = argparse.ArgumentParser(description='distributed download scripts for Common Crawl data')
+    parser.add_argument('--config', type=str, default='configs', help='path to the config directory')
+    args = parser.parse_args()
+    return args
+
+
 def main():
-    db_engine = db.db_connect(DB_CONF)
+    args = get_args()
+    config = configs.load_config(args.config)
+    socket.setdefaulttimeout(config.network.timeout)
+    db_engine = db.db_connect(config)
 
     while True:
         try:
-            check_schedule(start_time=START_TIME, end_time=END_TIME, enabled=SCHEDULE_ENABLED)
-            check_connectivity()
+            check_schedule(config)
+            check_connectivity(config)
         except KeyboardInterrupt:
             logging.info(f'Bye.')
             return
@@ -102,7 +121,7 @@ def main():
         logging.info('Fetching a new job...')
         session = Session(bind=db_engine)
         uri = None
-        tries = 0
+        retries = 0
         while True:
             try:
                 session.begin()
@@ -116,77 +135,97 @@ def main():
                     session.close()
                     return
                 uri = job.uri
-                job.started_at = datetime.datetime.now(tz=pytz.timezone(TIMEZONE))
+                job.started_at = datetime.datetime.now(tz=pytz.timezone(config.timezone))
                 job.download_state = models.Data.DOWNLOAD_DOWNLOADING
                 session.add(job)
                 session.commit()
-                logging.info(f'New job fetched: '
-                             f'{colorama.Fore.LIGHTCYAN_EX}'
-                             f'{{id={job.id}, uri={job.uri}}}'
-                             f'{colorama.Fore.RESET}'
-                             f'.')
+                logging.info(
+                    f'New job fetched: '
+                    f'{colorama.Fore.LIGHTCYAN_EX}'
+                    f'{{id={job.id}, uri={job.uri}}}'
+                    f'{colorama.Fore.RESET}'
+                    f'.'
+                )
                 session.close()
             except Exception as e:
-                if tries < RETRIES:
+                if retries < config.worker.max_retries:
                     session.rollback()
-                    logging.error(f'{colorama.Fore.LIGHTRED_EX}'
-                                  f'An error has occurred: {e}'
-                                  f'{colorama.Fore.RESET}')
-                    logging.info(f'Retry after {RETRY_INTERVAL} seconds ({RETRIES - tries} left)).')
-                    time.sleep(RETRY_INTERVAL)
-                    tries += 1
+                    logging.error(
+                        f'{colorama.Fore.LIGHTRED_EX}'
+                        f'An error has occurred: {e}'
+                        f'{colorama.Fore.RESET}'
+                    )
+                    logging.info(
+                        f'Retry after {config.worker.retry_interval} seconds '
+                        f'({config.worker.max_retries - retries} left).'
+                    )
+                    time.sleep(config.worker.retry_interval)
+                    retries += 1
                 else:
-                    panic(f'{colorama.Fore.LIGHTRED_EX}'
-                          f'Failed to fetch a new job after {RETRIES} retries.'
-                          f'{colorama.Fore.RESET}')
+                    panic(
+                        f'{colorama.Fore.LIGHTRED_EX}'
+                        f'Failed to fetch a new job after {config.worker.max_retries} retries.'
+                        f'{colorama.Fore.RESET}'
+                    )
                 continue
             break
 
-        url = f'{URL_BASE}/{uri}'
-        logging.info(f'Download from '
-                     f'{colorama.Fore.LIGHTCYAN_EX}'
-                     f'{url}'
-                     f'{colorama.Fore.RESET}')
+        url = f'{config.base_url}/{uri}'
+        logging.info(
+            f'Download from '
+            f'{colorama.Fore.LIGHTCYAN_EX}'
+            f'{url}'
+            f'{colorama.Fore.RESET}'
+        )
         session = Session(bind=db_engine)
 
         try:
-            file = pathlib.Path(DOWNLOAD_PATH).joinpath(uri)
+            file = pathlib.Path(config.worker.download_path).joinpath(uri)
             file.parent.mkdir(parents=True, exist_ok=True)
 
-            tries = 0
+            retries = 0
             while True:
                 try:
                     progbar = utils.DownloadProgBar()
                     wget.download(url, out=str(file), bar=progbar.update)
                     job = find_job_by_uri(session=session, uri=uri)
-                    job.worker = find_worker_by_name(session=session, name=WORKER_NAME)
-                    job.finished_at = datetime.datetime.now(tz=pytz.timezone(TIMEZONE))
+                    job.worker = find_or_create_worker_by_name(session=session, name=config.worker.name)
+                    job.finished_at = datetime.datetime.now(tz=pytz.timezone(config.timezone))
                     job.size = int(urlopen(url).info().get('Content-Length', -1))
                     job.download_state = models.Data.DOWNLOAD_FINISHED
-                    logging.info(f'Job '
-                                 f'{colorama.Back.GREEN}{colorama.Fore.BLACK}'
-                                 f'succeeded'
-                                 f'{colorama.Fore.RESET}{colorama.Back.RESET}'
-                                 f'.')
+                    logging.info(
+                        f'Job '
+                        f'{colorama.Back.GREEN}{colorama.Fore.BLACK}'
+                        f'succeeded'
+                        f'{colorama.Fore.RESET}{colorama.Back.RESET}'
+                        f'.'
+                    )
                     break
                 except KeyboardInterrupt:
                     raise KeyboardInterrupt
                 except Exception as e:
-                    if tries < RETRIES:
-                        logging.error(f'{colorama.Fore.LIGHTRED_EX}'
-                                      f'An error has occurred: {e}'
-                                      f'{colorama.Fore.RESET}')
-                        logging.info(f'Retry after {RETRY_INTERVAL} seconds ({RETRIES - tries} left)).')
-                        time.sleep(RETRY_INTERVAL)
-                        tries += 1
+                    if retries < config.worker.max_retries:
+                        logging.error(
+                            f'{colorama.Fore.LIGHTRED_EX}'
+                            f'An error has occurred: {e}'
+                            f'{colorama.Fore.RESET}'
+                        )
+                        logging.info(
+                            f'Retry after {config.worker.retry_interval} seconds '
+                            f'({config.worker.max_retries - retries} left).'
+                        )
+                        time.sleep(config.worker.retry_interval)
+                        retries += 1
                     else:
                         job = find_job_by_uri(session=session, uri=uri)
                         job.download_state = models.Data.DOWNLOAD_FAILED
-                        logging.error(f'Job '
-                                      f'{colorama.Back.RED}'
-                                      f'failed'
-                                      f'{colorama.Back.RESET}'
-                                      f'.')
+                        logging.error(
+                            f'Job '
+                            f'{colorama.Back.RED}'
+                            f'failed'
+                            f'{colorama.Back.RESET}'
+                            f'.'
+                        )
                         break
 
             session.add(job)
@@ -197,11 +236,13 @@ def main():
             job = find_job_by_uri(session=session, uri=uri)
             job.started_at = None
             job.download_state = models.Data.DOWNLOAD_PENDING
-            logging.warning(f'Job '
-                            f'{colorama.Back.YELLOW}{colorama.Fore.BLACK}'
-                            f'cancelled'
-                            f'{colorama.Fore.RESET}{colorama.Back.RESET}'
-                            f'.')
+            logging.warning(
+                f'Job '
+                f'{colorama.Back.YELLOW}{colorama.Fore.BLACK}'
+                f'cancelled'
+                f'{colorama.Fore.RESET}{colorama.Back.RESET}'
+                f'.'
+            )
             session.add(job)
             session.commit()
             session.close()
@@ -209,20 +250,9 @@ def main():
 
 
 if __name__ == '__main__':
-    config = configs.config(CONFIG_PATH)
-    DB_CONF = db.get_database_config(config)
-    WORKER_NAME = config.get('worker', 'name')
-    RETRY_INTERVAL = config.getint('worker', 'retry_interval')
-    RETRIES = config.getint('worker', 'retries')
-    SOCKET_TIMEOUT = config.getint('worker', 'socket_timeout')
-    DOWNLOAD_PATH = config.get('worker', 'download_path')
-    SCHEDULE_ENABLED = config.getboolean('schedule', 'enabled')
-    START_TIME = config.get('schedule', 'start_time')
-    END_TIME = config.get('schedule', 'end_time')
-    SCHEDULE_RETRY_INTERVAL = config.getint('schedule', 'retry_interval')
-
-    colorama.init()
-    logging.basicConfig(level=logging.INFO,
-                        format=f'{colorama.Style.BRIGHT}[%(asctime)s] [%(levelname)8s]{colorama.Style.RESET_ALL} %(message)s')
-    socket.setdefaulttimeout(SOCKET_TIMEOUT)
+    colorama.just_fix_windows_console()
+    logging.basicConfig(
+        level=logging.INFO,
+        format=f'{colorama.Style.BRIGHT}[%(asctime)s] [%(levelname)8s]{colorama.Style.RESET_ALL} %(message)s',
+    )
     main()

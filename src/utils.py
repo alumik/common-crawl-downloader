@@ -3,8 +3,6 @@ import sys
 import time
 import numpy as np
 
-from typing import Iterable, List, Optional
-
 
 class ProgBar:
     """Displays a progress bar.
@@ -18,11 +16,13 @@ class ProgBar:
           interval: Minimum visual progress update interval (in seconds).
     """
 
-    def __init__(self,
-                 target: int,
-                 width: int = 30,
-                 interval: float = 0.05,
-                 stateful_metrics: Optional[Iterable] = None):
+    def __init__(
+            self,
+            target: int,
+            width: int = 30,
+            interval: float = 0.05,
+            stateful_metrics: list[str] | None = None,
+    ):
         self._target = target
         self._width = width
         self._interval = interval
@@ -46,8 +46,8 @@ class ProgBar:
 
     def update(self,
                current: int,
-               values: Optional[List] = None,
-               finalize: Optional[bool] = None):
+               values: list | None = None,
+               finalize: bool | None = None):
         """Updates the progress bar.
 
         Arguments:

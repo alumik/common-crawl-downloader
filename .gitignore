@@ -3,4 +3,4 @@ __pycache__/
 downloaded/
 configs/*
 
-!configs/default.conf
+!configs/default.yaml
