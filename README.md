@@ -58,8 +58,9 @@ timezone: Asia/Shanghai
 base_url: https://commoncrawl.s3.amazonaws.com/
 ```
 
-**Do not** modify the default config file directly. You can create your own `local.yaml` under the `configs` folder and
-add modified entries in it.
+> [!WARNING]
+> **Do not** modify the default config file directly. You can create your own `local.yaml` under the `configs` folder
+> and add modified entries in it.
 
 An example of a valid local config file:
 
@@ -83,8 +84,13 @@ Run the following command at the root path of the project:
 python src/main.py
 ```
 
-**Always** press `CTRL-C` to exit the download process. Killing it directly will cause data loss and inconsistency in
-database.
+> [!CAUTION]
+> **Always** press `CTRL-C` to exit the download process. Killing it directly will cause data loss and inconsistency in
+> the database.
+
+You can run this script multiple times to download data in parallel. The script will automatically check the database to
+avoid duplicate downloads and ensure consistency. Just make sure to **use the same database configuration** in all
+instances and **modify the worker name** in the config file.
 
 ## Database Structure
 
